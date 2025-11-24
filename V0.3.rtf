@@ -1,0 +1,887 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red89\green138\blue67;\red24\green24\blue24;\red193\green193\blue193;
+\red212\green214\blue154;\red70\green137\blue204;\red194\green126\blue101;\red140\green211\blue254;\red202\green202\blue202;
+\red205\green173\blue106;\red183\green111\blue179;\red167\green197\blue152;\red196\green83\blue86;}
+{\*\expandedcolortbl;;\cssrgb\c41569\c60000\c33333;\cssrgb\c12157\c12157\c12157;\cssrgb\c80000\c80000\c80000;
+\cssrgb\c86275\c86275\c66667;\cssrgb\c33725\c61176\c83922;\cssrgb\c80784\c56863\c47059;\cssrgb\c61176\c86275\c99608;\cssrgb\c83137\c83137\c83137;
+\cssrgb\c84314\c72941\c49020;\cssrgb\c77255\c52549\c75294;\cssrgb\c70980\c80784\c65882;\cssrgb\c81961\c41176\c41176;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs24 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 #!/bin/bash\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # ===============================\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 # User Management Script\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 # Handles user creation, deletion, updates, SFTP jail, group assignments\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 # ===============================\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 set\cf4 \strokec4  \cf6 \strokec6 -euo\cf4 \strokec4  \cf7 \strokec7 pipefail\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf8 \cb3 \strokec8 IFS\cf9 \strokec9 =\cf7 \strokec7 $'\cf10 \strokec10 \\n\\t\cf7 \strokec7 '\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Config ----------------------------------------------------------------\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf8 \cb3 \strokec8 GROUP_CONFIG\cf9 \strokec9 =\cf7 \strokec7 "groups.conf"\cf4 \cb1 \strokec4 \
+\cf8 \cb3 \strokec8 LOGFILE\cf9 \strokec9 =\cf7 \strokec7 "log/manage_users.log"\cf4 \cb1 \strokec4 \
+\cf8 \cb3 \strokec8 USERS_CONFIG\cf9 \strokec9 =\cf7 \strokec7 "users.conf"\cf4 \strokec4   \cb1 \
+\cf8 \cb3 \strokec8 ADMINS_CONFIG\cf9 \strokec9 =\cf7 \strokec7 "admins.conf"\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Ensure required commands exist\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf11 \cb3 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 cmd\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 openssl\cf4 \strokec4  \cf7 \strokec7 getent\cf4 \strokec4  \cf7 \strokec7 gpasswd\cf4 \strokec4  \cf7 \strokec7 useradd\cf4 \strokec4  \cf7 \strokec7 usermod\cf4 \strokec4  \cf7 \strokec7 userdel\cf4 \strokec4  \cf7 \strokec7 chpasswd\cf4 \strokec4  \cf7 \strokec7 chage\cf4 \strokec4  \cf7 \strokec7 tar\cf4 \strokec4  \cf7 \strokec7 groupadd\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 command\cf4 \strokec4  \cf6 \strokec6 -v\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $cmd\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >\cf7 \strokec7 /dev/null\cf4 \strokec4  \cf9 \strokec9 2>&1\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  \{ \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Missing command: \cf8 \strokec8 $cmd\cf7 \strokec7 "\cf4 \strokec4 ; \cf5 \strokec5 exit\cf4 \strokec4  \cf12 \strokec12 1\cf4 \strokec4 ; \}\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf11 \cb3 \strokec11 done\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Helpers ---------------------------------------------------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Trim leading and trailing whitespace from a string\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 trim\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 var\cf9 \strokec9 =\cf7 \strokec7 "\cf6 \strokec6 $*\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 var\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 var\cf9 \strokec9 #\cf7 \strokec7 "$\{\cf8 \strokec8 var\cf9 \strokec9 %%\cf7 \strokec7 [\cf9 \strokec9 !\cf7 \strokec7 [\cf9 \strokec9 :\cf7 \strokec7 space\cf9 \strokec9 :\cf7 \strokec7 ]]\cf9 \strokec9 *\cf7 \strokec7 \}"\}"\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 var\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 var\cf9 \strokec9 %\cf7 \strokec7 "$\{\cf8 \strokec8 var\cf9 \strokec9 ##*\cf7 \strokec7 [\cf9 \strokec9 !\cf7 \strokec7 [\cf9 \strokec9 :\cf7 \strokec7 space\cf9 \strokec9 :\cf7 \strokec7 ]]\}"\}"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 printf\cf4 \strokec4  \cf7 \strokec7 '%s'\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $var\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Generate a random password (base64, 14 chars)\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 generate_password\cf4 \strokec4 () \{ \cf5 \strokec5 openssl\cf4 \strokec4  \cf7 \strokec7 rand\cf4 \strokec4  \cf6 \strokec6 -base64\cf4 \strokec4  \cf12 \strokec12 14\cf4 \strokec4 ; \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Log an action with timestamp and current user\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 log_action\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "$(\cf5 \strokec5 date\cf7 \strokec7  '+%Y-%m-%d %H:%M:%S') [$(\cf5 \strokec5 whoami\cf7 \strokec7 )] - \cf8 \strokec8 $1\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >>\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $LOGFILE\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Manage users.conf ------------------------------------------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Synchronize users.conf based on current group memberships\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 sync_users_conf\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 :\cf4 \strokec4  \cf9 \strokec9 >\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \strokec4   \cf2 \strokec2 # Clear existing content\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 g\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 members\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 getent\cf4 \strokec4  \cf7 \strokec7 group\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 |\cf4 \strokec4  \cf5 \strokec5 cut\cf4 \strokec4  \cf6 \strokec6 -d:\cf4 \strokec4  \cf6 \strokec6 -f4\cf4 \strokec4  \cf9 \strokec9 |\cf4 \strokec4  \cf5 \strokec5 tr\cf4 \strokec4  \cf7 \strokec7 ','\cf4 \strokec4  \cf7 \strokec7 ' '\cf4 \strokec4 )\cb1 \
+\cb3         \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 u\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf8 \strokec8 $members\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $u\cf7 \strokec7 :\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >>\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 chmod\cf4 \strokec4  \cf12 \strokec12 640\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Update or add a user's entry in users.conf\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 update_users_conf_entry\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 username\cf9 \strokec9 =\cf8 \strokec8 $1\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 groups\cf9 \strokec9 =\cf8 \strokec8 $2\cf4 \cb1 \strokec4 \
+\cb3     \cf2 \strokec2 # Remove existing entries for user\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 sed\cf4 \strokec4  \cf6 \strokec6 -i\cf4 \strokec4  \cf7 \strokec7 "/^\cf8 \strokec8 $username\cf7 \strokec7 :/d"\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 g\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf8 \strokec8 $groups\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 :\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >>\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Remove a user's entry from users.conf\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 remove_users_conf_entry\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 username\cf9 \strokec9 =\cf8 \strokec8 $1\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 sed\cf4 \strokec4  \cf6 \strokec6 -i\cf4 \strokec4  \cf7 \strokec7 "/^\cf8 \strokec8 $username\cf7 \strokec7 :/d"\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Load groups config ---------------------------------------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Load groups and their associated directories from groups.conf\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 load_groups\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf11 \strokec11 while\cf4 \strokec4  \cf7 \strokec7 IFS\cf9 \strokec9 =\cf4 \strokec4  \cf7 \strokec7 read\cf4 \strokec4  \cf6 \strokec6 -r\cf4 \strokec4  \cf7 \strokec7 line\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  [ \cf9 \strokec9 -n\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $line\cf7 \strokec7 "\cf4 \strokec4  ]; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 line\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $line\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3         [ \cf9 \strokec9 -z\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $line\cf7 \strokec7 "\cf4 \strokec4  ] && \cf11 \strokec11 continue\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 case\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $line\cf7 \strokec7 "\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf10 \strokec10 \\#\cf9 \strokec9 *)\cf4 \strokec4  \cf11 \strokec11 continue\cf4 \strokec4  ;; \cf11 \strokec11 esac\cf4 \strokec4   \cf2 \strokec2 # skip comments\cf4 \cb1 \strokec4 \
+\
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  [[ \cf7 \strokec7 "\cf8 \strokec8 $line\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 ==\cf4 \strokec4  \cf9 \strokec9 *\cf4 \strokec4 :\cf9 \strokec9 *\cf4 \strokec4  ]]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf8 \strokec8 group\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 line\cf9 \strokec9 %%:*\cf7 \strokec7 \}"\cf4 \cb1 \strokec4 \
+\cb3             \cf8 \strokec8 dirs\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 line\cf9 \strokec9 #*:\cf7 \strokec7 \}"\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 else\cf4 \cb1 \strokec4 \
+\cb3             \cf8 \strokec8 group\cf9 \strokec9 =\cf7 \strokec7 "\cf8 \strokec8 $line\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3             \cf8 \strokec8 dirs\cf9 \strokec9 =\cf7 \strokec7 ""\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3         \cf8 \strokec8 group\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $group\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3         \cf8 \strokec8 dirs\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dirs\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\
+\cb3         \cf8 \strokec8 abs_dirs\cf9 \strokec9 =\cf7 \strokec7 ""\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  [ \cf9 \strokec9 -n\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dirs\cf7 \strokec7 "\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf2 \strokec2 # Convert relative paths to absolute\cf4 \cb1 \strokec4 \
+\cb3             \cf8 \strokec8 IFS\cf9 \strokec9 =\cf7 \strokec7 ','\cf4 \strokec4  \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -ra\cf4 \strokec4  \cf7 \strokec7 dir_array\cf4 \strokec4  \cf9 \strokec9 <<<\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dirs\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3             \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 d\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 dir_array\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3                 \cf8 \strokec8 d\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $d\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3                 \cf8 \strokec8 d\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 eval\cf4 \strokec4  \cf7 \strokec7 echo\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $d\cf7 \strokec7 "\cf4 \strokec4 )       \cf2 \strokec2 # expand ~\cf4 \cb1 \strokec4 \
+\cb3                 \cf8 \strokec8 d\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 realpath\cf4 \strokec4  \cf6 \strokec6 -m\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $d\cf7 \strokec7 "\cf4 \strokec4 )     \cf2 \strokec2 # canonical absolute path\cf4 \cb1 \strokec4 \
+\cb3                 \cf8 \strokec8 abs_dirs\cf9 \strokec9 +=\cf7 \strokec7 "\cf8 \strokec8 $d\cf7 \strokec7 ,"\cf4 \cb1 \strokec4 \
+\cb3             \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3             \cf8 \strokec8 abs_dirs\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 abs_dirs\cf9 \strokec9 %\cf7 \strokec7 ,\}"\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3         \cf8 \strokec8 GROUPS\cf9 \strokec9 +=\cf4 \strokec4 (\cf7 \strokec7 "\cf8 \strokec8 $group\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3         \cf8 \strokec8 GROUP_DIRS\cf9 \strokec9 +=\cf4 \strokec4 (\cf7 \strokec7 "\cf8 \strokec8 $abs_dirs\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3     \cf11 \strokec11 done\cf4 \strokec4  \cf9 \strokec9 <\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $GROUP_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Load admins config ---------------------------------------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Load the list of admin users from admins.conf\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 load_admins\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf8 \strokec8 ADMINS\cf9 \strokec9 =\cf4 \strokec4 ()\cb1 \
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  [ \cf9 \strokec9 !\cf4 \strokec4  \cf9 \strokec9 -f\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $ADMINS_CONFIG\cf7 \strokec7 "\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 mkdir\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "$(\cf5 \strokec5 dirname\cf7 \strokec7  "\cf8 \strokec8 $ADMINS_CONFIG\cf7 \strokec7 ")"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf6 \strokec6 -e\cf4 \strokec4  \cf7 \strokec7 "root\\ngestion"\cf4 \strokec4  \cf9 \strokec9 >\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $ADMINS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 chmod\cf4 \strokec4  \cf12 \strokec12 644\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $ADMINS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Created default admins config at \cf8 \strokec8 $ADMINS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf11 \strokec11 while\cf4 \strokec4  \cf8 \strokec8 IFS\cf9 \strokec9 =\cf4 \strokec4  \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -r\cf4 \strokec4  \cf7 \strokec7 line\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  [ \cf9 \strokec9 -n\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $line\cf7 \strokec7 "\cf4 \strokec4  ]; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 line\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $line\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3         [ \cf9 \strokec9 -z\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $line\cf7 \strokec7 "\cf4 \strokec4  ] && \cf11 \strokec11 continue\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 case\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $line\cf7 \strokec7 "\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf10 \strokec10 \\#\cf9 \strokec9 *)\cf4 \strokec4  \cf11 \strokec11 continue\cf4 \strokec4  ;; \cf11 \strokec11 esac\cf4 \strokec4   \cf2 \strokec2 # skip comments\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 ADMINS\cf9 \strokec9 +=\cf4 \strokec4 (\cf7 \strokec7 "\cf8 \strokec8 $line\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3     \cf11 \strokec11 done\cf4 \strokec4  \cf9 \strokec9 <\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $ADMINS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Ensure groups and directories exist & correct permissions --------------\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 ensure_groups_and_dirs\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 i\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf9 \strokec9 !\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 g\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf8 \strokec8 $i\cf7 \strokec7 ]\}"\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 dlist\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 GROUP_DIRS\cf7 \strokec7 [\cf8 \strokec8 $i\cf7 \strokec7 ]\cf9 \strokec9 :-\cf7 \strokec7 \}"\cf4 \cb1 \strokec4 \
+\
+\cb3         \cf2 \strokec2 # Create group if it does not exist\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  \cf5 \strokec5 getent\cf4 \strokec4  \cf7 \strokec7 group\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >\cf7 \strokec7 /dev/null\cf4 \strokec4 ; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 groupadd\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Created group: \cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 log_action\cf4 \strokec4  \cf7 \strokec7 "Created group \cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  [ \cf9 \strokec9 -n\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dlist\cf7 \strokec7 "\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf8 \strokec8 IFS\cf9 \strokec9 =\cf7 \strokec7 ','\cf4 \strokec4  \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -ra\cf4 \strokec4  \cf7 \strokec7 dirs_arr\cf4 \strokec4  \cf9 \strokec9 <<<\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dlist\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3             \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 rawdir\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 dirs_arr\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3                 \cf8 \strokec8 dir\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $rawdir\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3                 [ \cf9 \strokec9 -z\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dir\cf7 \strokec7 "\cf4 \strokec4  ] && \cf11 \strokec11 continue\cf4 \cb1 \strokec4 \
+\
+\cb3                 \cf2 \strokec2 # Create directory with setgid so files inherit group\cf4 \cb1 \strokec4 \
+\cb3                 \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 mkdir\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dir\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3                 \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 chgrp\cf4 \strokec4  \cf6 \strokec6 -R\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dir\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3                 \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 chmod\cf4 \strokec4  \cf6 \strokec6 -R\cf4 \strokec4  \cf12 \strokec12 2775\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dir\cf7 \strokec7 "\cf4 \strokec4              \cf2 \strokec2 # drwxrwsr-x\cf4 \cb1 \strokec4 \
+\cb3                 \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 find\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dir\cf7 \strokec7 "\cf4 \strokec4  \cf6 \strokec6 -type\cf4 \strokec4  \cf7 \strokec7 f\cf4 \strokec4  \cf6 \strokec6 -exec\cf4 \strokec4  \cf7 \strokec7 chmod\cf4 \strokec4  \cf12 \strokec12 664\cf4 \strokec4  \cf7 \strokec7 \{\}\cf4 \strokec4  \cf10 \strokec10 \\;\cf4 \strokec4    \cf2 \strokec2 # rw-rw-r-- files\cf4 \cb1 \strokec4 \
+\cb3                 \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 find\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dir\cf7 \strokec7 "\cf4 \strokec4  \cf6 \strokec6 -type\cf4 \strokec4  \cf7 \strokec7 d\cf4 \strokec4  \cf6 \strokec6 -exec\cf4 \strokec4  \cf7 \strokec7 chmod\cf4 \strokec4  \cf12 \strokec12 2775\cf4 \strokec4  \cf7 \strokec7 \{\}\cf4 \strokec4  \cf10 \strokec10 \\;\cf4 \strokec4   \cf2 \strokec2 # rwxrwsr-x directories\cf4 \cb1 \strokec4 \
+\
+\cb3                 \cf5 \strokec5 log_action\cf4 \strokec4  \cf7 \strokec7 "Ensured dir \cf8 \strokec8 $dir\cf7 \strokec7  exists, group \cf8 \strokec8 $g\cf7 \strokec7 , perms 770"\cf4 \cb1 \strokec4 \
+\
+\cb3                 \cf2 \strokec2 # Add admins to each group\cf4 \cb1 \strokec4 \
+\cb3                 \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 admin\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 ADMINS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3                     \cf11 \strokec11 if\cf4 \strokec4  \cf5 \strokec5 id\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $admin\cf7 \strokec7 "\cf4 \strokec4  &\cf9 \strokec9 >\cf4 \strokec4 /dev/null; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3                         \cf5 \strokec5 usermod\cf4 \strokec4  \cf6 \strokec6 -aG\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $admin\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3                     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3                 \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3             \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Display groups for selection -----------------------------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Show groups with numbers for selection in user assignment\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 list_groups_for_selection\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Available groups (num -> group : directories):"\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 i\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf9 \strokec9 !\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 idx\cf9 \strokec9 =\cf4 \strokec4 $((\cf5 \strokec5 i+1\cf4 \strokec4 ))\cb1 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "  \cf8 \strokec8 $idx\cf7 \strokec7 ) $\{\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf8 \strokec8 $i\cf7 \strokec7 ]\} : $\{\cf8 \strokec8 GROUP_DIRS\cf7 \strokec7 [\cf8 \strokec8 $i\cf7 \strokec7 ]\cf9 \strokec9 :-\cf7 \strokec7 <\cf8 \strokec8 no\cf7 \strokec7  \cf8 \strokec8 dir\cf7 \strokec7 >\}"\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 ""\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Choose one or more numbers separated by commas (ex: 1,3)."\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Leave empty or 0 for no group."\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Assign groups to user ------------------------------------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Assign selected groups to a user and update users.conf\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 assign_group\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 username\cf9 \strokec9 =\cf8 \strokec8 $1\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 selection\cf9 \strokec9 =\cf8 \strokec8 $2\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # Remove user from all existing groups first\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 g\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 gpasswd\cf4 \strokec4  \cf6 \strokec6 -d\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >\cf7 \strokec7 /dev/null\cf4 \strokec4  \cf9 \strokec9 2>&1\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  \cf5 \strokec5 true\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  [ \cf9 \strokec9 -z\cf4 \strokec4  \cf7 \strokec7 "$(\cf5 \strokec5 trim\cf7 \strokec7  "\cf8 \strokec8 $selection\cf7 \strokec7 ")"\cf4 \strokec4  ] \cf9 \strokec9 ||\cf4 \strokec4  [ \cf7 \strokec7 "$(\cf5 \strokec5 trim\cf7 \strokec7  "\cf8 \strokec8 $selection\cf7 \strokec7 ")"\cf4 \strokec4  \cf9 \strokec9 =\cf4 \strokec4  \cf7 \strokec7 "0"\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 update_users_conf_entry\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 ""\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf8 \strokec8 IFS\cf9 \strokec9 =\cf7 \strokec7 ','\cf4 \strokec4  \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -ra\cf4 \strokec4  \cf7 \strokec7 sel_arr\cf4 \strokec4  \cf9 \strokec9 <<<\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $selection\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 groups_assigned\cf9 \strokec9 =\cf4 \strokec4 ()\cb1 \
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 token\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 sel_arr\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 token\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $token\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3         [ \cf9 \strokec9 -z\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $token\cf7 \strokec7 "\cf4 \strokec4  ] && \cf11 \strokec11 continue\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  [[ \cf7 \strokec7 "\cf8 \strokec8 $token\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 =~\cf4 \strokec4  ^[0-9]+$ ]]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Invalid selection: \cf8 \strokec8 $token\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >&2\cf4 \cb1 \strokec4 \
+\cb3             \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3         \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 idx\cf9 \strokec9 =\cf4 \strokec4 $((\cf5 \strokec5 token\cf4 \strokec4  \cf7 \strokec7 -\cf4 \strokec4  \cf12 \strokec12 1\cf4 \strokec4 ))\cb1 \
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  (( \cf8 \strokec8 idx\cf4 \strokec4  \cf9 \strokec9 <\cf4 \strokec4  \cf12 \strokec12 0\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  \cf8 \strokec8 idx\cf4 \strokec4  \cf9 \strokec9 >=\cf4 \strokec4  $\{\cf9 \strokec9 #\cf8 \strokec8 GROUPS\cf4 \strokec4 [\cf9 \strokec9 @\cf4 \strokec4 ]\} )); \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Selection out of range: \cf8 \strokec8 $token\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >&2\cf4 \cb1 \strokec4 \
+\cb3             \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3         \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 target_group\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 GROUPS\cf7 \strokec7 [idx]\}"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 usermod\cf4 \strokec4  \cf6 \strokec6 -aG\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $target_group\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 groups_assigned\cf9 \strokec9 +=\cf4 \strokec4 (\cf7 \strokec7 "\cf8 \strokec8 $target_group\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # Update users.conf with the new group list\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 update_users_conf_entry\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 groups_assigned\cf7 \strokec7 [\cf9 \strokec9 *\cf7 \strokec7 ]\}"\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # Return assigned groups as a space-separated string\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 printf\cf4 \strokec4  \cf7 \strokec7 '%s'\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 groups_assigned\cf7 \strokec7 [\cf9 \strokec9 *\cf7 \strokec7 ]\}"\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Display users and their roles ----------------------------------------\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 display_users_with_roles\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "----------------------------"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Current users and their roles (from users.conf):"\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # Display users with groups from users.conf\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  [ \cf9 \strokec9 -f\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \strokec4  ] && [ \cf9 \strokec9 -s\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 while\cf4 \strokec4  \cf8 \strokec8 IFS\cf9 \strokec9 =\cf7 \strokec7 :\cf4 \strokec4  \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -r\cf4 \strokec4  \cf7 \strokec7 user\cf4 \strokec4  \cf7 \strokec7 groups\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 " - \cf8 \strokec8 $user\cf7 \strokec7  : $\{\cf8 \strokec8 groups\cf9 \strokec9 :-\cf7 \strokec7 <\cf8 \strokec8 no\cf7 \strokec7  \cf8 \strokec8 group\cf7 \strokec7 >\}"\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 done\cf4 \strokec4  \cf9 \strokec9 <\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 else\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "<no users defined in users.conf>"\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # Display users with no group assigned in users.conf\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 ""\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Users with no group assigned:"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 mapfile\cf4 \strokec4  \cf6 \strokec6 -t\cf4 \strokec4  \cf7 \strokec7 system_users\cf4 \strokec4  \cf9 \strokec9 <\cf4 \strokec4  \cf7 \strokec7 <(\cf5 \strokec5 awk\cf7 \strokec7  \cf6 \strokec6 -F:\cf7 \strokec7  '$3 >= 1000 \{print $1\}' /etc/passwd)\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # Build a set of users from users.conf\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 declare\cf4 \strokec4  \cf6 \strokec6 -A\cf4 \strokec4  \cf8 \strokec8 users_in_conf\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  [ \cf9 \strokec9 -f\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \strokec4  ] && [ \cf9 \strokec9 -s\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 while\cf4 \strokec4  \cf8 \strokec8 IFS\cf9 \strokec9 =\cf7 \strokec7 :\cf4 \strokec4  \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -r\cf4 \strokec4  \cf7 \strokec7 user\cf4 \strokec4  \cf7 \strokec7 _\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 users_in_conf["\cf8 \strokec8 $user\cf5 \strokec5 "]\cf7 \strokec7 =1\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 done\cf4 \strokec4  \cf9 \strokec9 <\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 user\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 system_users\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  [ \cf9 \strokec9 -z\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 users_in_conf\cf7 \strokec7 [\cf8 \strokec8 $user\cf7 \strokec7 ]\cf9 \strokec9 :-\cf7 \strokec7 \}"\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 " - \cf8 \strokec8 $user\cf7 \strokec7  : <no group>"\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "----------------------------"\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\
+\
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Jail user in their home with symlinks to group dirs ------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Create a chroot jail for a user and mount their group directories\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 jail_user\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 username\cf9 \strokec9 =\cf8 \strokec8 $1\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 groups\cf9 \strokec9 =\cf8 \strokec8 $2\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 jail_home\cf9 \strokec9 =\cf7 \strokec7 "/home/jail/\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 mkdir\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $jail_home\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 chown\cf4 \strokec4  \cf7 \strokec7 root:root\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $jail_home\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 chmod\cf4 \strokec4  \cf12 \strokec12 755\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $jail_home\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # Create user-specific private data folder\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 data_dir\cf9 \strokec9 =\cf7 \strokec7 "\cf8 \strokec8 $jail_home\cf7 \strokec7 /data"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 mkdir\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $data_dir\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 chown\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 :\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $data_dir\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 chmod\cf4 \strokec4  \cf12 \strokec12 750\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $data_dir\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # Unmount old directories in the jail except data\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 mnt\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $jail_home\cf7 \strokec7 "/*\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         [ \cf9 \strokec9 -d\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $mnt\cf7 \strokec7 "\cf4 \strokec4  ] \cf9 \strokec9 ||\cf4 \strokec4  \cf11 \strokec11 continue\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 umount\cf4 \strokec4  \cf6 \strokec6 -f\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $mnt\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 2>\cf7 \strokec7 /dev/null\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  \cf5 \strokec5 true\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 base\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 basename\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $mnt\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  [ \cf7 \strokec7 "\cf8 \strokec8 $base\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 !=\cf4 \strokec4  \cf7 \strokec7 "data"\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 rm\cf4 \strokec4  \cf6 \strokec6 -rf\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $mnt\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 2>\cf7 \strokec7 /dev/null\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  \cf5 \strokec5 true\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # Mount group directories as bind mounts inside the jail\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 g\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf8 \strokec8 $groups\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 group_dir\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 group_dir\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 grep\cf4 \strokec4  \cf7 \strokec7 "^\cf8 \strokec8 $g\cf7 \strokec7 :"\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $GROUP_CONFIG\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 |\cf4 \strokec4  \cf5 \strokec5 cut\cf4 \strokec4  \cf6 \strokec6 -d:\cf4 \strokec4  \cf6 \strokec6 -f2\cf4 \strokec4 )\cb1 \
+\cb3         [ \cf9 \strokec9 -z\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $group_dir\cf7 \strokec7 "\cf4 \strokec4  ] && \{ \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\uc0\u9888 \u65039  No folder defined for group \cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \strokec4 ; \cf11 \strokec11 continue\cf4 \strokec4 ; \}\cb1 \
+\
+\cb3         \cf8 \strokec8 group_dir\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 realpath\cf4 \strokec4  \cf6 \strokec6 -m\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $group_dir\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3         [ \cf9 \strokec9 !\cf4 \strokec4  \cf9 \strokec9 -d\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $group_dir\cf7 \strokec7 "\cf4 \strokec4  ] && \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 mkdir\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $group_dir\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\
+\cb3         \cf2 \strokec2 # Ensure group ownership and permissions\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 chgrp\cf4 \strokec4  \cf6 \strokec6 -R\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $group_dir\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 chmod\cf4 \strokec4  \cf6 \strokec6 -R\cf4 \strokec4  \cf7 \strokec7 g+rw\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $group_dir\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 find\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $group_dir\cf7 \strokec7 "\cf4 \strokec4  \cf6 \strokec6 -type\cf4 \strokec4  \cf7 \strokec7 d\cf4 \strokec4  \cf6 \strokec6 -exec\cf4 \strokec4  \cf7 \strokec7 chmod\cf4 \strokec4  \cf7 \strokec7 g+s\cf4 \strokec4  \cf7 \strokec7 \{\}\cf4 \strokec4  \cf7 \strokec7 +\cf4 \cb1 \strokec4 \
+\
+\cb3         \cf2 \strokec2 # Mount into the jail\cf4 \cb1 \strokec4 \
+\cb3         \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 mount_point\cf9 \strokec9 =\cf7 \strokec7 "\cf8 \strokec8 $jail_home\cf7 \strokec7 /\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 mkdir\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $mount_point\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 mount\cf4 \strokec4  \cf6 \strokec6 --bind\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $group_dir\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $mount_point\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\
+\cb3         \cf2 \strokec2 # Persist in fstab if not already present\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  \cf5 \strokec5 grep\cf4 \strokec4  \cf6 \strokec6 -q\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $mount_point\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 /etc/fstab\cf4 \strokec4 ; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $group_dir\cf7 \strokec7   \cf8 \strokec8 $mount_point\cf7 \strokec7   none  bind  0  0"\cf4 \strokec4  \cf9 \strokec9 |\cf4 \strokec4  \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 tee\cf4 \strokec4  \cf6 \strokec6 -a\cf4 \strokec4  \cf7 \strokec7 /etc/fstab\cf4 \strokec4  \cf9 \strokec9 >\cf7 \strokec7 /dev/null\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Folder \cf8 \strokec8 $group_dir\cf7 \strokec7  mounted in jail for \cf8 \strokec8 $username\cf7 \strokec7  (\cf8 \strokec8 $mount_point\cf7 \strokec7 )"\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # Update user's home directory and shell\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 usermod\cf4 \strokec4  \cf6 \strokec6 -d\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $jail_home\cf7 \strokec7 "\cf4 \strokec4  \cf6 \strokec6 -s\cf4 \strokec4  \cf7 \strokec7 /bin/bash\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Update sshd_config for SFTP jail --------------------------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Add Match block to sshd_config for chrooted SFTP access\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 # type="sftp" or "shell"\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 update_sshd_config_for_user\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 username\cf9 \strokec9 =\cf8 \strokec8 $1\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 jail_home\cf9 \strokec9 =\cf7 \strokec7 "/home/jail/\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 type\cf9 \strokec9 =\cf8 \strokec8 $\{2\cf9 \strokec9 :-\cf8 \strokec8 shell\}\cf4 \strokec4   \cf2 \strokec2 # default shell\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # Remove previous Match block for the user\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 sed\cf4 \strokec4  \cf6 \strokec6 -i\cf4 \strokec4  \cf7 \strokec7 "/^Match User \cf8 \strokec8 $username\cf7 \strokec7 $/,/^$/d"\cf4 \strokec4  \cf7 \strokec7 /etc/ssh/sshd_config\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  [ \cf7 \strokec7 "\cf8 \strokec8 $type\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 =\cf4 \strokec4  \cf7 \strokec7 "sftp"\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf6 \strokec6 -e\cf4 \strokec4  \cf7 \strokec7 "Match User \cf8 \strokec8 $username\cf7 \strokec7 \\n    ChrootDirectory \cf8 \strokec8 $jail_home\cf7 \strokec7 \\n    ForceCommand internal-sftp\\n    AllowTcpForwarding no\\n    X11Forwarding no\\n"\cf4 \strokec4  \cf9 \strokec9 |\cf4 \strokec4  \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 tee\cf4 \strokec4  \cf6 \strokec6 -a\cf4 \strokec4  \cf7 \strokec7 /etc/ssh/sshd_config\cf4 \strokec4  \cf9 \strokec9 >\cf7 \strokec7 /dev/null\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 else\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "User \cf8 \strokec8 $username\cf7 \strokec7  allowed normal shell (no SFTP jail)"\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 systemctl\cf4 \strokec4  \cf7 \strokec7 reload\cf4 \strokec4  \cf7 \strokec7 ssh\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "sshd_config updated and reloaded for user \cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- CRUD user functions --------------------------------------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Add a new user, assign groups, create jail, force password change\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 add_user\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Enter new username: "\cf4 \strokec4  \cf7 \strokec7 username\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 username\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  [[ \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 =~\cf4 \strokec4  ^[a-z_][a-z0-9_-]\cf9 \strokec9 *\cf4 \strokec4 $ ]]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Invalid username format."\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \strokec4  \cb1 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  \cf5 \strokec5 id\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  &\cf9 \strokec9 >\cf4 \strokec4 /dev/null; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' already exists."\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf5 \strokec5 list_groups_for_selection\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Group numbers: "\cf4 \strokec4  \cf7 \strokec7 selection\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf8 \strokec8 password\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 generate_password\cf4 \strokec4 )\cb1 \
+\
+\cb3     \cf5 \strokec5 useradd\cf4 \strokec4  \cf6 \strokec6 -m\cf4 \strokec4  \cf6 \strokec6 -s\cf4 \strokec4  \cf7 \strokec7 /bin/bash\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 :\cf8 \strokec8 $password\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 |\cf4 \strokec4  \cf5 \strokec5 chpasswd\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 chage\cf4 \strokec4  \cf6 \strokec6 -d\cf4 \strokec4  \cf12 \strokec12 0\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4    \cf2 \strokec2 # force password change on first login\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf8 \strokec8 assigned\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 assign_group\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $selection\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3     \cf5 \strokec5 jail_user\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $assigned\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' created successfully."\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Temporary password: \cf8 \strokec8 $password\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 log_action\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' created; groups: $\{\cf8 \strokec8 assigned\cf9 \strokec9 :-\cf7 \strokec7 <\cf8 \strokec8 none\cf7 \strokec7 >\}"\cf4 \cb1 \strokec4 \
+\cb3     \cb1 \
+\cb3     \cf5 \strokec5 update_sshd_config_for_user\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Update existing user's group assignments and jail\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 update_user\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 display_users_with_roles\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Enter username to update: "\cf4 \strokec4  \cf7 \strokec7 username\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 username\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  [[ \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 =~\cf4 \strokec4  ^[a-z_][a-z0-9_-]\cf9 \strokec9 *\cf4 \strokec4 $ ]]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Invalid username format."\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \strokec4  \cb1 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  \cf5 \strokec5 id\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  &\cf9 \strokec9 >\cf4 \strokec4 /dev/null; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' does not exist."\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf5 \strokec5 list_groups_for_selection\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "New group numbers: "\cf4 \strokec4  \cf7 \strokec7 selection\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf8 \strokec8 assigned\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 assign_group\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $selection\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3     \cf5 \strokec5 jail_user\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $assigned\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Updated roles for user '\cf8 \strokec8 $username\cf7 \strokec7 '."\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 log_action\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' role updated to groups: $\{\cf8 \strokec8 assigned\cf9 \strokec9 :-\cf7 \strokec7 <\cf8 \strokec8 none\cf7 \strokec7 >\}"\cf4 \cb1 \strokec4 \
+\cb3     \cb1 \
+\cb3     \cf5 \strokec5 update_sshd_config_for_user\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Delete a user with backup of home directory\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 delete_user\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 display_users_with_roles\cf4 \strokec4    \cf2 \strokec2 # <-- Affiche les users et leurs r\'f4les\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Enter username to delete: "\cf4 \strokec4  \cf7 \strokec7 username\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 username\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  \cf5 \strokec5 id\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  &\cf9 \strokec9 >\cf4 \strokec4 /dev/null; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' does not exist."\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Are you sure you want to delete '\cf8 \strokec8 $username\cf7 \strokec7 '? [y/N]: "\cf4 \strokec4  \cf7 \strokec7 confirm\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  [[ \cf7 \strokec7 "\cf8 \strokec8 $confirm\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 =~\cf4 \strokec4  ^[Yy]$ ]]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 mkdir\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 /srv/archives\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  [ \cf9 \strokec9 -d\cf4 \strokec4  \cf7 \strokec7 "/home/\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 tar\cf4 \strokec4  \cf6 \strokec6 -czf\cf4 \strokec4  \cf7 \strokec7 "/srv/archives/$\{\cf8 \strokec8 username\cf7 \strokec7 \}_$(\cf5 \strokec5 date\cf7 \strokec7  +%F).tar.gz"\cf4 \strokec4  \cf7 \strokec7 "/home/\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  \cf5 \strokec5 true\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 userdel\cf4 \strokec4  \cf6 \strokec6 -r\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 remove_users_conf_entry\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' deleted (backup stored in /srv/archives)."\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 log_action\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' deleted"\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 else\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Operation cancelled."\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- List users per defined group ----------------------------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Print all groups and members, and the users.conf content\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 list_users\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Configured groups and members:"\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 i\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf9 \strokec9 !\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 g\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf8 \strokec8 $i\cf7 \strokec7 ]\}"\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 dirs\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 GROUP_DIRS\cf7 \strokec7 [\cf8 \strokec8 $i\cf7 \strokec7 ]\cf9 \strokec9 :-\cf7 \strokec7 <\cf8 \strokec8 no\cf7 \strokec7  \cf8 \strokec8 dir\cf7 \strokec7 >\}"\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 members\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 getent\cf4 \strokec4  \cf7 \strokec7 group\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 |\cf4 \strokec4  \cf5 \strokec5 cut\cf4 \strokec4  \cf6 \strokec6 -d:\cf4 \strokec4  \cf6 \strokec6 -f4\cf4 \strokec4 )\cb1 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 " - \cf8 \strokec8 $g\cf7 \strokec7  : \cf8 \strokec8 $dirs\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "     members: $\{\cf8 \strokec8 members\cf9 \strokec9 :-\cf7 \strokec7 <\cf8 \strokec8 none\cf7 \strokec7 >\}"\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 ""\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "From \cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 :"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 cat\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 2>\cf7 \strokec7 /dev/null\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "<empty>"\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf5 \strokec5 display_users_with_roles\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Reset user password --------------------------------------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Regenerate password for a user and force them to change at next login\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 reset_password\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Enter username to reset password: "\cf4 \strokec4  \cf7 \strokec7 username\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 username\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  \cf5 \strokec5 id\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  &\cf9 \strokec9 >\cf4 \strokec4 /dev/null; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' does not exist."\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf8 \strokec8 new_password\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 generate_password\cf4 \strokec4 )\cb1 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 :\cf8 \strokec8 $new_password\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 |\cf4 \strokec4  \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 chpasswd\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 sudo\cf4 \strokec4  \cf7 \strokec7 passwd\cf4 \strokec4  \cf6 \strokec6 -e\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4    \cf2 \strokec2 # expire imm\'e9diatement le mot de passe\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Password for '\cf8 \strokec8 $username\cf7 \strokec7 ' has been reset."\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Temporary password: \cf8 \strokec8 $new_password\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\uc0\u9888 \u65039  The user will be asked to change it at next login."\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "   If SSH closes immediately, reconnect with:"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "   ssh -t \cf8 \strokec8 $username\cf7 \strokec7 @<server> passwd"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 log_action\cf4 \strokec4  \cf7 \strokec7 "Password for '\cf8 \strokec8 $username\cf7 \strokec7 ' reset and expired (must be changed at next login)."\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Log cleanup ----------------------------------------------------------\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 # Keep only the last N log files, delete older ones to save disk space\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 cleanup_log\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 logfile\cf9 \strokec9 =\cf7 \strokec7 "\cf8 \strokec8 $LOGFILE\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 max_lines\cf9 \strokec9 =\cf12 \strokec12 5000\cf4 \strokec4      \cf2 \strokec2 # Maximum lines to keep\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 reduce_by\cf9 \strokec9 =\cf12 \strokec12 500\cf4 \strokec4       \cf2 \strokec2 # Number of oldest lines to remove at once\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 min_lines\cf9 \strokec9 =\cf12 \strokec12 4000\cf4 \strokec4      \cf2 \strokec2 # Target after cleanup\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # If logfile doesn't exist, do nothing\cf4 \cb1 \strokec4 \
+\cb3     [ \cf9 \strokec9 !\cf4 \strokec4  \cf9 \strokec9 -f\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $logfile\cf7 \strokec7 "\cf4 \strokec4  ] && \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 current_lines\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 current_lines\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 wc\cf4 \strokec4  \cf6 \strokec6 -l\cf4 \strokec4  \cf9 \strokec9 <\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $logfile\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  (( \cf8 \strokec8 current_lines\cf4 \strokec4  \cf9 \strokec9 >\cf4 \strokec4  \cf8 \strokec8 max_lines\cf4 \strokec4  )); \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf2 \strokec2 # Calculate how many lines to keep after removing oldest block(s)\cf4 \cb1 \strokec4 \
+\cb3         \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 target_lines\cf9 \strokec9 =\cf4 \strokec4 $((\cf5 \strokec5 current_lines\cf4 \strokec4  \cf7 \strokec7 -\cf4 \strokec4  \cf7 \strokec7 reduce_by\cf4 \strokec4 ))\cb1 \
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  (( \cf8 \strokec8 target_lines\cf4 \strokec4  \cf9 \strokec9 <\cf4 \strokec4  \cf8 \strokec8 min_lines\cf4 \strokec4  )); \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf8 \strokec8 target_lines\cf9 \strokec9 =\cf8 \strokec8 $min_lines\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3         \cf2 \strokec2 # Keep only the last $target_lines lines\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 tail\cf4 \strokec4  \cf6 \strokec6 -n\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $target_lines\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $logfile\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 logfile\cf7 \strokec7 \}.tmp"\cf4 \strokec4  && \cf5 \strokec5 mv\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 logfile\cf7 \strokec7 \}.tmp"\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $logfile\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Log cleaned: reduced from \cf8 \strokec8 $current_lines\cf7 \strokec7  to \cf8 \strokec8 $target_lines\cf7 \strokec7  lines."\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Validate configuration -------------------------------------------------\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 validate_config\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 errors\cf9 \strokec9 =\cf12 \strokec12 0\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # V\'e9rifier que les groupes sont valides\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 g\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  [[ \cf7 \strokec7 "\cf8 \strokec8 $g\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 =~\cf4 \strokec4  ^[a-z_][a-z0-9_-]\cf9 \strokec9 *\cf4 \strokec4 $ ]]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\uc0\u10060  Nom de groupe invalide dans groups.conf: '\cf8 \strokec8 $g\cf7 \strokec7 '"\cf4 \strokec4  \cf9 \strokec9 >&2\cf4 \cb1 \strokec4 \
+\cb3             ((\cf8 \strokec8 errors\cf9 \strokec9 ++\cf4 \strokec4 ))\cb1 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # V\'e9rifier que les r\'e9pertoires existent (ou sont cr\'e9ables)\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 dirs\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 GROUP_DIRS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 IFS\cf9 \strokec9 =\cf7 \strokec7 ','\cf4 \strokec4  \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -ra\cf4 \strokec4  \cf7 \strokec7 dlist\cf4 \strokec4  \cf9 \strokec9 <<<\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $dirs\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 d\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 dlist\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3             [ \cf9 \strokec9 -z\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $d\cf7 \strokec7 "\cf4 \strokec4  ] && \cf11 \strokec11 continue\cf4 \cb1 \strokec4 \
+\cb3             \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  \cf5 \strokec5 mkdir\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $d\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 2>\cf7 \strokec7 /dev/null\cf4 \strokec4 ; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3                 \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\uc0\u10060  Impossible de cr\'e9er ou acc\'e9der au dossier: \cf8 \strokec8 $d\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >&2\cf4 \cb1 \strokec4 \
+\cb3                 ((\cf8 \strokec8 errors\cf9 \strokec9 ++\cf4 \strokec4 ))\cb1 \
+\cb3             \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf2 \strokec2 # V\'e9rifier que les admins existent sur le syst\'e8me\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 admin\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 ADMINS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  \cf5 \strokec5 id\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $admin\cf7 \strokec7 "\cf4 \strokec4  &\cf9 \strokec9 >\cf4 \strokec4 /dev/null; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3             \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\uc0\u9888 \u65039  Admin '\cf8 \strokec8 $admin\cf7 \strokec7 ' d\'e9fini dans admins.conf n'existe pas encore."\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  ((\cf8 \strokec8 errors\cf4 \strokec4  \cf9 \strokec9 >\cf4 \strokec4  \cf12 \strokec12 0\cf4 \strokec4 )); \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\uc0\u9888 \u65039  Erreurs de configuration d\'e9tect\'e9es (\cf8 \strokec8 $errors\cf7 \strokec7 ). Corrige avant de continuer."\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 exit\cf4 \strokec4  \cf12 \strokec12 1\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 else\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\uc0\u9989  Configuration valid\'e9e avec succ\'e8s."\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Config management functions ------------------------------------------\cf4 \cb1 \strokec4 \
+\
+\cf2 \cb3 \strokec2 # Generic function to edit a config file\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 edit_config_file\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 file\cf9 \strokec9 =\cf7 \strokec7 "\cf8 \strokec8 $1\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 action\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 while\cf4 \strokec4  \cf5 \strokec5 true\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 ""\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Editing \cf8 \strokec8 $file\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "1) Add entry"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "2) Update entry"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "3) Delete entry"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "0) Back"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Choice: "\cf4 \strokec4  \cf7 \strokec7 action\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 action\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $action\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\
+\cb3         \cf11 \strokec11 case\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $action\cf7 \strokec7 "\cf4 \strokec4  \cf11 \strokec11 in\cf4 \cb1 \strokec4 \
+\cb3             \cf13 \strokec13 1\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 add_entry\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $file\cf7 \strokec7 "\cf4 \strokec4  ;;\cb1 \
+\cb3             \cf13 \strokec13 2\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 update_entry\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $file\cf7 \strokec7 "\cf4 \strokec4  ;;\cb1 \
+\cb3             \cf13 \strokec13 3\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 delete_entry\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $file\cf7 \strokec7 "\cf4 \strokec4  ;;\cb1 \
+\cb3             \cf13 \strokec13 0\cf9 \strokec9 )\cf4 \strokec4  \cf11 \strokec11 break\cf4 \strokec4  ;;\cb1 \
+\cb3             \cf9 \strokec9 *)\cf4 \strokec4  \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Invalid choice."\cf4 \strokec4  ;;\cb1 \
+\cb3         \cf11 \strokec11 esac\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Add entry to a file\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 add_entry\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 file\cf9 \strokec9 =\cf7 \strokec7 "\cf8 \strokec8 $1\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Enter new entry: "\cf4 \strokec4  \cf7 \strokec7 entry\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 entry\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $entry\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  [ \cf9 \strokec9 -n\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $entry\cf7 \strokec7 "\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $entry\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >>\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $file\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Entry added."\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 log_action\cf4 \strokec4  \cf7 \strokec7 "Added entry to \cf8 \strokec8 $file\cf7 \strokec7 : \cf8 \strokec8 $entry\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 else\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Empty entry, nothing added."\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Update entry in a file\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 update_entry\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 file\cf9 \strokec9 =\cf7 \strokec7 "\cf8 \strokec8 $1\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Enter the entry to update (exact match): "\cf4 \strokec4  \cf7 \strokec7 old_entry\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 old_entry\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $old_entry\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  \cf5 \strokec5 grep\cf4 \strokec4  \cf6 \strokec6 -qxF\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $old_entry\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $file\cf7 \strokec7 "\cf4 \strokec4 ; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Entry not found."\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 return\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Enter the new entry: "\cf4 \strokec4  \cf7 \strokec7 new_entry\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 new_entry\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $new_entry\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  [ \cf9 \strokec9 -n\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $new_entry\cf7 \strokec7 "\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 sed\cf4 \strokec4  \cf6 \strokec6 -i\cf4 \strokec4  \cf7 \strokec7 "s|^$\{\cf8 \strokec8 old_entry\cf7 \strokec7 \}$|$\{\cf8 \strokec8 new_entry\cf7 \strokec7 \}|"\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $file\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Entry updated."\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 log_action\cf4 \strokec4  \cf7 \strokec7 "Updated entry in \cf8 \strokec8 $file\cf7 \strokec7 : '\cf8 \strokec8 $old_entry\cf7 \strokec7 ' -> '\cf8 \strokec8 $new_entry\cf7 \strokec7 '"\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 else\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Empty entry, update cancelled."\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Delete entry from a file\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 delete_entry\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf6 \strokec6 local\cf4 \strokec4  \cf8 \strokec8 file\cf9 \strokec9 =\cf7 \strokec7 "\cf8 \strokec8 $1\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Enter the entry to delete (exact match): "\cf4 \strokec4  \cf7 \strokec7 entry\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 entry\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $entry\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  \cf5 \strokec5 grep\cf4 \strokec4  \cf6 \strokec6 -qxF\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $entry\cf7 \strokec7 "\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $file\cf7 \strokec7 "\cf4 \strokec4 ; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 sed\cf4 \strokec4  \cf6 \strokec6 -i\cf4 \strokec4  \cf7 \strokec7 "/^$\{\cf8 \strokec8 entry\cf7 \strokec7 \}$/d"\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $file\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Entry deleted."\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 log_action\cf4 \strokec4  \cf7 \strokec7 "Deleted entry from \cf8 \strokec8 $file\cf7 \strokec7 : \cf8 \strokec8 $entry\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 else\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Entry not found."\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Sub-menu for configuration files -------------------------------------\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 manage_configs\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf11 \strokec11 while\cf4 \strokec4  \cf7 \strokec7 true\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 ""\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Manage configuration files"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "1) groups.conf"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "2) admins.conf"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "3) users.conf"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "0) Back"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Choice: "\cf4 \strokec4  \cf7 \strokec7 choice\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 choice\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $choice\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\cb3         \cf11 \strokec11 case\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $choice\cf7 \strokec7 "\cf4 \strokec4  \cf11 \strokec11 in\cf4 \cb1 \strokec4 \
+\cb3             \cf13 \strokec13 1\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 edit_config_file\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $GROUP_CONFIG\cf7 \strokec7 "\cf4 \strokec4  ;;\cb1 \
+\cb3             \cf13 \strokec13 2\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 edit_config_file\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $ADMINS_CONFIG\cf7 \strokec7 "\cf4 \strokec4  ;;\cb1 \
+\cb3             \cf13 \strokec13 3\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 edit_config_file\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \strokec4  ;;\cb1 \
+\cb3             \cf13 \strokec13 0\cf9 \strokec9 )\cf4 \strokec4  \cf11 \strokec11 break\cf4 \strokec4  ;;\cb1 \
+\cb3             \cf9 \strokec9 *)\cf4 \strokec4  \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Invalid choice."\cf4 \strokec4  ;;\cb1 \
+\cb3         \cf11 \strokec11 esac\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Lock or unlock user accounts ------------------------------------------\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 lock_user\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Enter username to lock: "\cf4 \strokec4  \cf7 \strokec7 username\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 username\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  \cf5 \strokec5 id\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  &\cf9 \strokec9 >\cf4 \strokec4 /dev/null; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' does not exist."\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf5 \strokec5 usermod\cf4 \strokec4  \cf6 \strokec6 -L\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 passwd\cf4 \strokec4  \cf6 \strokec6 -l\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >\cf7 \strokec7 /dev/null\cf4 \strokec4  \cf9 \strokec9 2>&1\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  \cf5 \strokec5 true\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\uc0\u55357 \u56594  User '\cf8 \strokec8 $username\cf7 \strokec7 ' has been locked."\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 log_action\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' locked"\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 unlock_user\cf4 \strokec4 () \{\cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Enter username to unlock: "\cf4 \strokec4  \cf7 \strokec7 username\cf4 \cb1 \strokec4 \
+\cb3     \cf8 \strokec8 username\cf9 \strokec9 =\cf4 \strokec4 $(\cf5 \strokec5 trim\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4 )\cb1 \
+\
+\cb3     \cf11 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  \cf5 \strokec5 id\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  &\cf9 \strokec9 >\cf4 \strokec4 /dev/null; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' does not exist."\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 return\cf4 \strokec4  \cf12 \strokec12 0\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf5 \strokec5 usermod\cf4 \strokec4  \cf6 \strokec6 -U\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 passwd\cf4 \strokec4  \cf6 \strokec6 -u\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $username\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 >\cf7 \strokec7 /dev/null\cf4 \strokec4  \cf9 \strokec9 2>&1\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  \cf5 \strokec5 true\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "\uc0\u55357 \u56595  User '\cf8 \strokec8 $username\cf7 \strokec7 ' has been unlocked."\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 log_action\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $username\cf7 \strokec7 ' unlocked"\cf4 \cb1 \strokec4 \
+\cb3 \}\cb1 \
+\
+\
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Start ----------------------------------------------------------------\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 unset\cf4 \strokec4  \cf7 \strokec7 GROUPS\cf4 \strokec4  \cf7 \strokec7 GROUP_DIRS\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf6 \cb3 \strokec6 declare\cf4 \strokec4  \cf6 \strokec6 -a\cf4 \strokec4  \cf8 \strokec8 GROUPS\cf4 \cb1 \strokec4 \
+\cf6 \cb3 \strokec6 declare\cf4 \strokec4  \cf6 \strokec6 -a\cf4 \strokec4  \cf8 \strokec8 GROUP_DIRS\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 load_admins\cf4 \cb1 \strokec4 \
+\cf5 \cb3 \strokec5 load_groups\cf4 \cb1 \strokec4 \
+\cf5 \cb3 \strokec5 validate_config\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf11 \cb3 \strokec11 if\cf4 \strokec4  [ \cf7 \strokec7 "$\{\cf9 \strokec9 #\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4  \cf9 \strokec9 -gt\cf4 \strokec4  \cf12 \strokec12 0\cf4 \strokec4  ]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf11 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 i\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf9 \strokec9 !\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \strokec4  \cb1 \
+\cb3         \cf8 \strokec8 group\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 GROUPS\cf7 \strokec7 [\cf8 \strokec8 $i\cf7 \strokec7 ]\}"\cf4 \strokec4  \cb1 \
+\cb3         \cf8 \strokec8 dir\cf9 \strokec9 =\cf7 \strokec7 "$\{\cf8 \strokec8 GROUP_DIRS\cf7 \strokec7 [\cf8 \strokec8 $i\cf7 \strokec7 ]\cf9 \strokec9 :-\cf7 \strokec7 <\cf8 \strokec8 no\cf7 \strokec7  \cf8 \strokec8 dir\cf7 \strokec7 >\}"\cf4 \cb1 \strokec4 \
+\cb3         \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 " - \cf8 \strokec8 $group\cf7 \strokec7  -> \cf8 \strokec8 $dir\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 done\cf4 \strokec4  \cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf11 \cb3 \strokec11 else\cf4 \strokec4  \cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "DEBUG: No groups loaded"\cf4 \strokec4  \cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf11 \cb3 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 ensure_groups_and_dirs\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Check if current user is authorized to run script\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf8 \cb3 \strokec8 current_user\cf9 \strokec9 =\cf7 \strokec7 "$(\cf5 \strokec5 id\cf7 \strokec7  \cf6 \strokec6 -un\cf7 \strokec7 )"\cf4 \cb1 \strokec4 \
+\cf8 \cb3 \strokec8 authorized\cf9 \strokec9 =\cf7 \strokec7 false\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf11 \cb3 \strokec11 for\cf4 \strokec4  \cf8 \strokec8 admin\cf4 \strokec4  \cf11 \strokec11 in\cf4 \strokec4  \cf7 \strokec7 "$\{\cf8 \strokec8 ADMINS\cf7 \strokec7 [\cf9 \strokec9 @\cf7 \strokec7 ]\}"\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf11 \strokec11 if\cf4 \strokec4  [[ \cf7 \strokec7 "\cf8 \strokec8 $current_user\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 ==\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $admin\cf7 \strokec7 "\cf4 \strokec4  ]]; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\cb3         \cf8 \strokec8 authorized\cf9 \strokec9 =\cf7 \strokec7 true\cf4 \cb1 \strokec4 \
+\cb3         \cf11 \strokec11 break\cf4 \cb1 \strokec4 \
+\cb3     \cf11 \strokec11 fi\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf11 \cb3 \strokec11 done\cf4 \cb1 \strokec4 \
+\
+\cf11 \cb3 \strokec11 if\cf4 \strokec4  \cf9 \strokec9 !\cf4 \strokec4  \cf8 \strokec8 $authorized\cf4 \strokec4 ; \cf11 \strokec11 then\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "User '\cf8 \strokec8 $current_user\cf7 \strokec7 ' is not authorized to run this script."\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 exit\cf4 \strokec4  \cf12 \strokec12 1\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf11 \cb3 \strokec11 fi\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Ensure log file exists and has correct perms\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 touch\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $LOGFILE\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cf5 \cb3 \strokec5 chown\cf4 \strokec4  \cf7 \strokec7 gestion:gestion\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $LOGFILE\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 2>\cf7 \strokec7 /dev/null\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  \cf5 \strokec5 true\cf4 \cb1 \strokec4 \
+\cf5 \cb3 \strokec5 chmod\cf4 \strokec4  \cf12 \strokec12 600\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $LOGFILE\cf7 \strokec7 "\cf4 \strokec4  \cf9 \strokec9 2>\cf7 \strokec7 /dev/null\cf4 \strokec4  \cf9 \strokec9 ||\cf4 \strokec4  \cf5 \strokec5 true\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # Ensure users.conf exists and sync it\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 touch\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \strokec4    \cb1 \
+\cf5 \cb3 \strokec5 chmod\cf4 \strokec4  \cf12 \strokec12 640\cf4 \strokec4  \cf7 \strokec7 "\cf8 \strokec8 $USERS_CONFIG\cf7 \strokec7 "\cf4 \cb1 \strokec4 \
+\cf5 \cb3 \strokec5 sync_users_conf\cf4 \cb1 \strokec4 \
+\cf5 \cb3 \strokec5 cleanup_log\cf4 \cb1 \strokec4 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec2 # --- Main menu ------------------------------------------------------------\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf11 \cb3 \strokec11 while\cf4 \strokec4  \cf5 \strokec5 true\cf4 \strokec4 ; \cf11 \strokec11 do\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf4 \cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 ""\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Choose an action:"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "1) Add user"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "2) Update user role"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "3) Delete user"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "4) List users per group"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "5) Reset user password"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "6) Manage configuration files"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "7) Lock user"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "8) Unlock user"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "0) Quit"\cf4 \cb1 \strokec4 \
+\cb3     \cf5 \strokec5 read\cf4 \strokec4  \cf6 \strokec6 -p\cf4 \strokec4  \cf7 \strokec7 "Choice: "\cf4 \strokec4  \cf7 \strokec7 action\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf11 \strokec11 case\cf4 \strokec4  \cf7 \strokec7 "$(\cf5 \strokec5 trim\cf7 \strokec7  "\cf8 \strokec8 $action\cf7 \strokec7 ")"\cf4 \strokec4  \cf11 \strokec11 in\cf4 \cb1 \strokec4 \
+\cb3         \cf13 \strokec13 1\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 add_user\cf4 \strokec4  ;;\cb1 \
+\cb3         \cf13 \strokec13 2\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 update_user\cf4 \strokec4  ;;\cb1 \
+\cb3         \cf13 \strokec13 3\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 delete_user\cf4 \strokec4  ;;\cb1 \
+\cb3         \cf13 \strokec13 4\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 list_users\cf4 \strokec4  ;;\cb1 \
+\cb3         \cf13 \strokec13 5\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 reset_password\cf4 \strokec4  ;;\cb1 \
+\cb3         \cf13 \strokec13 6\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 manage_configs\cf4 \strokec4  ;;\cb1 \
+\cb3         \cf13 \strokec13 7\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 lock_user\cf4 \strokec4  ;;\cb1 \
+\cb3         \cf13 \strokec13 8\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 unlock_user\cf4 \strokec4  ;;\cb1 \
+\cb3         \cf13 \strokec13 0\cf9 \strokec9 )\cf4 \strokec4  \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Exiting."\cf4 \strokec4 ; \cf11 \strokec11 break\cf4 \strokec4  ;;\cb1 \
+\cb3         \cf9 \strokec9 *)\cf4 \strokec4  \cf5 \strokec5 echo\cf4 \strokec4  \cf7 \strokec7 "Invalid choice."\cf4 \strokec4  ;;\cb1 \
+\cb3     \cf11 \strokec11 esac\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf11 \cb3 \strokec11 done\cf4 \cb1 \strokec4 \
+\
+}
