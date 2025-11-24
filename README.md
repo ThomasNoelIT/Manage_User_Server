@@ -253,6 +253,4 @@ log/
 ---
 
 ## ⭐ Author
-
-Developed for internal server administration automation in CSS (ULiège).
-Created to simplify and secure multi-user Linux environments.
+This project was developed by Thomas Noël for the CSS at ULiège to automate internal server administration, simplifying and securing multi-user Linux environments.
